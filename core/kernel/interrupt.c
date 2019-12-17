@@ -35,18 +35,26 @@ static struct itr_handler *find_handler(size_t it)
 
 void itr_handle(size_t it)
 {
-	struct itr_handler *h = find_handler(it);
+	struct itr_handler *h = NULL;
+	enum itr_return ret = ITRR_NONE;
 
-	if (!h) {
-		EMSG("Disabling unhandled interrupt %zu", it);
-		itr_chip->ops->disable(itr_chip, it);
-		return;
-	}
+    SLIST_FOREACH(h, &handlers, link) {
 
-	if (h->handler(h) != ITRR_HANDLED) {
-		EMSG("Disabling interrupt %zu not handled by handler", it);
-		itr_chip->ops->disable(itr_chip, it);
-	}
+        if (h->it != it)
+            continue;
+
+        ret = h->handler(h);
+
+        if (ret == ITRR_NONE) {
+            continue;
+        } else if (ret == ITRR_HANDLED) {
+            return;
+        } else {
+            EMSG("Disabling interrupt %zu not handled by handler", it);
+            itr_chip->ops->disable(itr_chip, it);
+            return;
+        }
+    }
 }
 
 void itr_add(struct itr_handler *h)
